@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户仪表盘</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        {% if is_admin %}
+            <h1 class="text-center mb-4">欢迎, 管理员</h1>
+            <h2 class="mb-3">所有用户信息</h2>
+            <form action="/update_users" method="POST" class="mb-3">
+                <button type="submit" class="btn btn-primary">更新用户列表</button>
+            </form>
+            <form action="/add_user" method="POST" class="mb-3">
+                <div class="mb-3">
+                    <input type="text" class="form-control" name="username" placeholder="用户名" required>
+                </div>
+                <div class="mb-3">
+                    <input type="password" class="form-control" name="password" placeholder="密码" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100">新增用户</button>
+            </form>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>ID</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                        <tr>
+                            <td>{{ user.name }}</td>
+                            <td>{{ user.id }}</td>
+                            <td>
+                                <form action="/delete_user" method="POST" style="display: inline;">
+                                    <input type="hidden" name="username" value="{{ user.name }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <h1 class="text-center mb-4">欢迎, {{ user_name }}</h1>
+            <h2 class="mb-3">用户信息</h2>
+            <div class="card shadow">
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for key, value in user_data.items() %}
+                            {% if key not in ['key_data', 'password'] %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ key }}:</strong> {{ value }}
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" 
+                                            data-bs-target="#editModal" data-field="{{ key }}">
+                                        修改
+                                    </button>
+                                </li>
+                            {% else %}
+                                <li class="list-group-item">
+                                    <div>
+                                        <strong>{{ key }}:</strong> {{ value }}
+                                    </div>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <form method="POST" action="/dashboard" class="mt-3">
+                <button type="submit" name="decrypt" class="btn btn-primary w-100">解密</button>
+            </form>
+            {% if decrypted_data %}
+                <div class="card shadow mt-3">
+                    <div class="card-body">
+                        <h2>
+                            解密后的数据：
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDecryptedData()">
+                                展开/收起
+                            </button>
+                        </h2>
+                        <pre id="decryptedData" style="display: none;">{{ decrypted_data }}</pre>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- 添加请求数据显示 -->
+            <div class="card shadow mt-3">
+                <div class="card-body">
+                    <h2>收到的请求</h2>
+                    {% if requests %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>请求ID</th>
+                                    <th>发送用户</th>
+                                    <th>状态</th>
+                                    <th>时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for req in requests %}
+                                    <tr>
+                                        <td>{{ req.request_id }}</td>
+                                        <td>{{ req.from_user }}</td>
+                                        <td>{{ req.status }}</td>
+                                        <td>{{ req.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>
+                                            <td>
+                                                <button class="btn btn-sm btn-success" onclick="handleRequest('{{ session.username }}', '{{ req.from_user }}', 'approve')">同意</button>
+                                                <button class="btn btn-sm btn-danger" onclick="handleRequest('{{ session.username }}', '{{ req.from_user }}', 'reject')">拒绝</button>
+                                            </td>
+                                        </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p>暂无收到的请求</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 添加权限数据显示 -->
+            <!-- 权限数据显示部分 -->
+            <div class="card shadow mt-3">
+                <div class="card-body">
+                    <h2>权限数据</h2>
+                    {% if permissions %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>发送用户</th>
+                                    <th>公钥</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 修改权限数据表格部分 -->
+                                {% for perm in permissions %}
+                                    <tr>
+                                        <td>{{ perm.from_user }}</td>
+                                        <td>{{ perm.public_key[:20] }}...</td>
+                                        <td>{{ perm._id.generation_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" onclick="deletePermission('{{ perm.from_user }}')">删除</button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p>暂无权限数据</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+        <div class="text-center mt-4">
+            <!-- 在dashboard.html底部找到查询按钮，确保href="/query" -->
+            <a href="/query" class="btn btn-info">查询</a>
+            <a href="/logout" class="btn btn-secondary">退出</a>
+        </div>
+    </div>
+</body>
+</html>
+
+<!-- 添加修改模态框 -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">修改数据</h5>
+                <button type="button" class="btn-close" data-bs-close="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <div class="mb-3">
+                        <label for="newValue" class="form-label">新值</label>
+                        <div id="inputContainer"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="securityLevel" class="form-label">安全等级</label>
+                        <select class="form-select" id="securityLevel" required>
+                            <option value="1">等级 1（不加密）</option>
+                            <option value="2">等级 2（128位加密）</option>
+                            <option value="3">等级 3（256位加密）</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveChanges">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加Bootstrap JS和自定义脚本 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentField = '';
+    let currentType = '';
+    
+    // 数据类型映射
+    const typeMapping = {
+        '年龄': 'number',
+        '身高': 'number',
+        '体重': 'number',
+        '性别': 'select',
+        // 其他字段默认为text
+    };
+
+    // 模态框显示时记录当前字段和类型
+    const editModal = document.getElementById('editModal');
+    editModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        currentField = button.getAttribute('data-field');
+        currentType = typeMapping[currentField] || 'text';
+        
+        const inputContainer = document.getElementById('inputContainer');
+        inputContainer.innerHTML = ''; // 清空之前的输入框
+        
+        if (currentType === 'select') {
+            // 创建下拉选择框
+            const select = document.createElement('select');
+            select.className = 'form-select';
+            select.id = 'newValue';
+            select.required = true;
+            
+            // 添加选项
+            const options = ['男', '女'];
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                opt.textContent = option;
+                select.appendChild(opt);
+            });
+            
+            inputContainer.appendChild(select);
+        } else {
+            // 创建普通输入框
+            const input = document.createElement('input');
+            input.type = currentType;
+            input.className = 'form-control';
+            input.id = 'newValue';
+            input.required = true;
+            if (currentType === 'number') {
+                input.pattern = '\\d*';
+            }
+            inputContainer.appendChild(input);
+        }
+    });
+
+    // 保存修改
+    document.getElementById('saveChanges').addEventListener('click', function() {
+        const input = document.getElementById('newValue');
+        const newValue = input.value;
+        const securityLevel = document.getElementById('securityLevel').value;
+
+        // 验证数据类型
+        if (currentType === 'number' && isNaN(newValue)) {
+            alert('请输入有效的数字');
+            return;
+        }
+
+        fetch('/update_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                field: currentField,
+                newValue: newValue,
+                securityLevel: securityLevel
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('更新失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('更新失败');
+        });
+    });
+</script>
+
+<script>
+    // 展开/收起解密数据
+    function toggleDecryptedData() {
+        const decryptedData = document.getElementById('decryptedData');
+        if (decryptedData.style.display === 'none') {
+            decryptedData.style.display = 'block';
+        } else {
+            decryptedData.style.display = 'none';
+        }
+    }
+</script>
+<script>
+    // 处理请求
+    // 修改函数定义，添加username参数
+    function handleRequest(current_user, from_user, action) {
+        fetch('/handle_request', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: current_user,  // 使用传入的参数
+                from_user: from_user,
+                action: action
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('操作失败');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('操作失败');
+        });
+    }
+</script>
+
+<script>
+    function deletePermission(from_user) {
+        if (confirm('确定要删除此权限吗？')) {
+            fetch('/delete_permission', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    from_user: from_user
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('删除失败');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('删除失败');
+            });
+        }
+    }
+</script>
